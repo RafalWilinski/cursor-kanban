@@ -672,9 +672,9 @@ export default function CloudAgentsKanban({ apiKeySet, onOpenSettings }: CloudAg
           </SheetHeader>
 
           {selectedAgent && (
-            <div className="flex-1 flex flex-col gap-4 overflow-hidden">
+            <div className="flex-1 flex flex-col gap-4 overflow-hidden px-4">
               {/* Agent Info */}
-              <div className="space-y-2 px-1">
+              <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Badge {...getStatusBadge(selectedIsDraft ? 'DRAFT' : (selectedAgent as Agent).status)}>
                     {selectedIsDraft ? 'DRAFT' : (selectedAgent as Agent).status}
@@ -719,22 +719,24 @@ export default function CloudAgentsKanban({ apiKeySet, onOpenSettings }: CloudAg
 
               {/* Conversation History */}
               {!selectedIsDraft && (
-                <div className="flex-1 flex flex-col min-h-0">
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                   <Label className="mb-2">Conversation</Label>
-                  <ScrollArea className="flex-1 border rounded-md p-3">
-                    {isLoadingConversation ? (
-                      <div className="flex items-center justify-center py-8">
-                        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : conversation?.messages.length ? (
-                      <div className="space-y-3">
-                        {conversation.messages.map((msg) => (
-                          <ConversationMessageItem key={msg.id} message={msg} />
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-center text-muted-foreground py-8">No conversation yet</p>
-                    )}
+                  <ScrollArea className="flex-1 border rounded-md overflow-hidden">
+                    <div className="p-3">
+                      {isLoadingConversation ? (
+                        <div className="flex items-center justify-center py-8">
+                          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : conversation?.messages.length ? (
+                        <div className="space-y-3">
+                          {conversation.messages.map((msg) => (
+                            <ConversationMessageItem key={msg.id} message={msg} />
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-center text-muted-foreground py-8">No conversation yet</p>
+                      )}
+                    </div>
                   </ScrollArea>
                 </div>
               )}
