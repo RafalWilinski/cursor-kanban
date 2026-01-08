@@ -17,6 +17,12 @@ export interface AgentTarget {
   autoCreatePr?: boolean;
   openAsCursorGithubApp?: boolean;
   skipReviewerRequest?: boolean;
+  // PR status fields
+  checksStatus?: 'pending' | 'success' | 'failure';
+  hasApproval?: boolean;
+  isMerged?: boolean;
+  isClosed?: boolean;
+  hasConflict?: boolean;
 }
 
 export type AgentStatus = 'RUNNING' | 'FINISHED' | 'STOPPED' | 'FAILED' | 'DRAFT';

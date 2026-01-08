@@ -48,6 +48,9 @@ import {
   XCircle,
   MessageSquare,
   AlertCircle,
+  ShieldAlert,
+  ShieldCheck,
+  GitPullRequestDraft,
 } from 'lucide-react';
 import {
   type Agent,
@@ -56,7 +59,6 @@ import {
   type ConversationMessage,
   type Repository,
   type DraftAgent,
-  getApiKey,
   getAllAgents,
   getConversation,
   createAgent,
@@ -68,7 +70,6 @@ import {
   getDrafts,
   saveDraft,
   deleteDraft,
-  getDraft,
 } from '@/lib/cursor-api';
 
 // Column configuration
@@ -77,12 +78,24 @@ const COLUMNS: Record<string, { title: string; description: string }> = {
   running: { title: 'In Progress', description: 'Agents currently working' },
   stopped: { title: 'Requesting Input', description: 'Waiting for follow-up' },
   failed: { title: 'Failed', description: 'Agents that encountered errors' },
-  review: { title: 'Open PR', description: 'Finished with open/draft PR' },
+  checks_failing: { title: 'Checks Failing', description: 'PRs with failing CI checks' },
+  has_conflict: { title: 'Has Conflict', description: 'PRs with merge conflicts' },
+  awaiting_review: { title: 'Awaiting Review', description: 'Checks pass, needs approval' },
+  approved: { title: 'Approved', description: 'PR approved, ready to merge' },
   merged: { title: 'Merged/Closed', description: 'PR merged or closed' },
 };
 
 // Map API status to column
-function getColumnForStatus(status: AgentStatus, hasPrUrl?: boolean): string {
+interface AgentPrInfo {
+  hasPrUrl?: boolean;
+  checksStatus?: 'pending' | 'success' | 'failure';
+  hasApproval?: boolean;
+  isMerged?: boolean;
+  isClosed?: boolean;
+  hasConflict?: boolean;
+}
+
+function getColumnForStatus(status: AgentStatus, prInfo?: AgentPrInfo): string {
   switch (status) {
     case 'DRAFT':
       return 'backlog';
@@ -93,8 +106,28 @@ function getColumnForStatus(status: AgentStatus, hasPrUrl?: boolean): string {
     case 'FAILED':
       return 'failed';
     case 'FINISHED':
-      // Finished with PR goes to review (open PR), without PR goes to requesting input
-      return hasPrUrl ? 'review' : 'stopped';
+      // No PR yet - goes to requesting input
+      if (!prInfo?.hasPrUrl) {
+        return 'stopped';
+      }
+      // PR is merged or closed
+      if (prInfo.isMerged || prInfo.isClosed) {
+        return 'merged';
+      }
+      // PR has merge conflict (high priority issue)
+      if (prInfo.hasConflict) {
+        return 'has_conflict';
+      }
+      // PR has failing checks
+      if (prInfo.checksStatus === 'failure') {
+        return 'checks_failing';
+      }
+      // Checks pass (or pending) but no approval yet
+      if (!prInfo.hasApproval) {
+        return 'awaiting_review';
+      }
+      // Has approval - ready to merge
+      return 'approved';
     default:
       return 'backlog';
   }
@@ -158,9 +191,50 @@ function AgentCard({ agent, isDraft, onClick }: AgentCardProps) {
           <p className="text-muted-foreground text-xs line-clamp-2">{(agent as DraftAgent).prompt}</p>
         )}
         {!isDraft && (agent as Agent).target?.prUrl && (
-          <div className="flex items-center gap-1 text-primary text-xs">
-            <ExternalLink className="size-3" />
-            <span>PR Available</span>
+          <div className="flex items-center gap-2 text-xs flex-wrap">
+            <a
+              href={(agent as Agent).target!.prUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-primary hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ExternalLink className="size-3" />
+              <span>PR</span>
+            </a>
+            {/* Conflict indicator */}
+            {(agent as Agent).target?.hasConflict && (
+              <span className="flex items-center gap-1 text-orange-600 dark:text-orange-500">
+                <GitPullRequestDraft className="size-3" />
+                <span>Conflict</span>
+              </span>
+            )}
+            {/* Check status indicator */}
+            {(agent as Agent).target?.checksStatus === 'failure' && (
+              <span className="flex items-center gap-1 text-destructive">
+                <ShieldAlert className="size-3" />
+                <span>Failing</span>
+              </span>
+            )}
+            {(agent as Agent).target?.checksStatus === 'success' && (
+              <span className="flex items-center gap-1 text-green-600 dark:text-green-500">
+                <ShieldCheck className="size-3" />
+                <span>Passing</span>
+              </span>
+            )}
+            {(agent as Agent).target?.checksStatus === 'pending' && (
+              <span className="flex items-center gap-1 text-yellow-600 dark:text-yellow-500">
+                <Loader2 className="size-3 animate-spin" />
+                <span>Running</span>
+              </span>
+            )}
+            {/* Approval indicator */}
+            {(agent as Agent).target?.hasApproval && (
+              <span className="flex items-center gap-1 text-green-600 dark:text-green-500">
+                <CheckCircle2 className="size-3" />
+                <span>LGTM</span>
+              </span>
+            )}
           </div>
         )}
         <time className="text-[10px] text-muted-foreground/60 tabular-nums">
@@ -335,12 +409,23 @@ export default function CloudAgentsKanban({ apiKeySet, onOpenSettings }: CloudAg
       running: [],
       stopped: [],
       failed: [],
-      review: [],
+      checks_failing: [],
+      has_conflict: [],
+      awaiting_review: [],
+      approved: [],
       merged: [],
     };
 
     agents.forEach((agent) => {
-      const column = getColumnForStatus(agent.status, !!agent.target?.prUrl);
+      const prInfo: AgentPrInfo = {
+        hasPrUrl: !!agent.target?.prUrl,
+        checksStatus: agent.target?.checksStatus,
+        hasApproval: agent.target?.hasApproval,
+        isMerged: agent.target?.isMerged,
+        isClosed: agent.target?.isClosed,
+        hasConflict: agent.target?.hasConflict,
+      };
+      const column = getColumnForStatus(agent.status, prInfo);
       if (result[column]) {
         result[column].push(agent);
       }
