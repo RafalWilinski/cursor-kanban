@@ -22,6 +22,7 @@ export interface AgentTarget {
   hasApproval?: boolean;
   isMerged?: boolean;
   isClosed?: boolean;
+  hasConflict?: boolean;
 }
 
 export type AgentStatus = 'RUNNING' | 'FINISHED' | 'STOPPED' | 'FAILED' | 'DRAFT';

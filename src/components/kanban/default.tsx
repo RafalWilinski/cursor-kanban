@@ -50,6 +50,7 @@ import {
   AlertCircle,
   ShieldAlert,
   ShieldCheck,
+  GitPullRequestDraft,
 } from 'lucide-react';
 import {
   type Agent,
@@ -78,8 +79,9 @@ const COLUMNS: Record<string, { title: string; description: string }> = {
   stopped: { title: 'Requesting Input', description: 'Waiting for follow-up' },
   failed: { title: 'Failed', description: 'Agents that encountered errors' },
   checks_failing: { title: 'Checks Failing', description: 'PRs with failing CI checks' },
+  has_conflict: { title: 'Has Conflict', description: 'PRs with merge conflicts' },
   awaiting_review: { title: 'Awaiting Review', description: 'Checks pass, needs approval' },
-  review: { title: 'Approved', description: 'PR approved, ready to merge' },
+  approved: { title: 'Approved', description: 'PR approved, ready to merge' },
   merged: { title: 'Merged/Closed', description: 'PR merged or closed' },
 };
 
@@ -90,6 +92,7 @@ interface AgentPrInfo {
   hasApproval?: boolean;
   isMerged?: boolean;
   isClosed?: boolean;
+  hasConflict?: boolean;
 }
 
 function getColumnForStatus(status: AgentStatus, prInfo?: AgentPrInfo): string {
@@ -111,6 +114,10 @@ function getColumnForStatus(status: AgentStatus, prInfo?: AgentPrInfo): string {
       if (prInfo.isMerged || prInfo.isClosed) {
         return 'merged';
       }
+      // PR has merge conflict (high priority issue)
+      if (prInfo.hasConflict) {
+        return 'has_conflict';
+      }
       // PR has failing checks
       if (prInfo.checksStatus === 'failure') {
         return 'checks_failing';
@@ -120,7 +127,7 @@ function getColumnForStatus(status: AgentStatus, prInfo?: AgentPrInfo): string {
         return 'awaiting_review';
       }
       // Has approval - ready to merge
-      return 'review';
+      return 'approved';
     default:
       return 'backlog';
   }
@@ -184,7 +191,7 @@ function AgentCard({ agent, isDraft, onClick }: AgentCardProps) {
           <p className="text-muted-foreground text-xs line-clamp-2">{(agent as DraftAgent).prompt}</p>
         )}
         {!isDraft && (agent as Agent).target?.prUrl && (
-          <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-2 text-xs flex-wrap">
             <a
               href={(agent as Agent).target!.prUrl}
               target="_blank"
@@ -195,6 +202,13 @@ function AgentCard({ agent, isDraft, onClick }: AgentCardProps) {
               <ExternalLink className="size-3" />
               <span>PR</span>
             </a>
+            {/* Conflict indicator */}
+            {(agent as Agent).target?.hasConflict && (
+              <span className="flex items-center gap-1 text-orange-600 dark:text-orange-500">
+                <GitPullRequestDraft className="size-3" />
+                <span>Conflict</span>
+              </span>
+            )}
             {/* Check status indicator */}
             {(agent as Agent).target?.checksStatus === 'failure' && (
               <span className="flex items-center gap-1 text-destructive">
@@ -396,8 +410,9 @@ export default function CloudAgentsKanban({ apiKeySet, onOpenSettings }: CloudAg
       stopped: [],
       failed: [],
       checks_failing: [],
+      has_conflict: [],
       awaiting_review: [],
-      review: [],
+      approved: [],
       merged: [],
     };
 
@@ -408,6 +423,7 @@ export default function CloudAgentsKanban({ apiKeySet, onOpenSettings }: CloudAg
         hasApproval: agent.target?.hasApproval,
         isMerged: agent.target?.isMerged,
         isClosed: agent.target?.isClosed,
+        hasConflict: agent.target?.hasConflict,
       };
       const column = getColumnForStatus(agent.status, prInfo);
       if (result[column]) {
