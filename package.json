@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cf:dev": "npx wrangler@latest pages dev dist --port 8788",
+    "cf:deploy": "npx wrangler@latest pages deploy dist --project-name ${CF_PAGES_PROJECT:-cursor-kanban}",
+    "cf:deploy:prod": "npx wrangler@latest pages deploy dist --project-name ${CF_PAGES_PROJECT:-cursor-kanban} --branch=main"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

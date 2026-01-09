@@ -7,6 +7,31 @@ Currently, two official plugins are available:
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
 - [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
+## Deploy to Cloudflare Pages
+
+This app builds to static files in `dist/`, suitable for **Cloudflare Pages**.
+
+### Option A: Cloudflare Pages (Git integration)
+
+- **Build command**: `npm run build`
+- **Build output directory**: `dist`
+- **SPA routing**: already configured via `public/_redirects`
+
+### Option B: Deploy from your machine (Wrangler)
+
+```bash
+npm install
+npm run build
+CF_PAGES_PROJECT=your-pages-project-name npm run cf:deploy
+```
+
+To preview the built site with Cloudflare’s local Pages runtime:
+
+```bash
+npm run build
+npm run cf:dev
+```
+
 ## React Compiler
 
 The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).

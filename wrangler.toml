@@ -1,0 +1,4 @@
+name = "cursor-kanban"
+
+# Cloudflare Pages (static assets)
+pages_build_output_dir = "dist"
