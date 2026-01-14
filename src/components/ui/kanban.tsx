@@ -259,7 +259,7 @@ function Kanban<T>({ value, onValueChange, getItemValue, children, className, on
   return (
     <KanbanContext.Provider value={contextValue}>
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
-        <div data-slot="kanban" data-dragging={activeId !== null} className={cn(className)}>
+        <div data-slot="kanban" data-dragging={activeId !== null} className={cn('flex flex-col', className)}>
           {children}
         </div>
       </DndContext>
@@ -277,7 +277,7 @@ function KanbanBoard({ children, className }: KanbanBoardProps) {
 
   return (
     <SortableContext items={columnIds} strategy={rectSortingStrategy}>
-      <div data-slot="kanban-board" className={cn('grid auto-rows-fr sm:grid-cols-3 gap-4', className)}>
+      <div data-slot="kanban-board" className={cn('flex-1 min-h-0', className)}>
         {children}
       </div>
     </SortableContext>
@@ -322,7 +322,7 @@ function KanbanColumn({ value, className, children, disabled }: KanbanColumnProp
         ref={setNodeRef}
         style={style}
         className={cn(
-          'group/kanban-column flex flex-col',
+          'group/kanban-column flex flex-col min-h-0',
           isSortableDragging && 'opacity-50',
           disabled && 'opacity-50',
           className,
