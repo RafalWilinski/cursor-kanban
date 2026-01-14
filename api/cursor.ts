@@ -4,8 +4,6 @@ export const config = {
 
 function corsHeaders(origin: string | null): Headers {
   const h = new Headers();
-  // Same-origin requests don't require CORS, but setting these makes the endpoint
-  // resilient when called from other origins (e.g. previews).
   h.set('Access-Control-Allow-Origin', origin ?? '*');
   h.set('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
   h.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
@@ -16,15 +14,7 @@ function corsHeaders(origin: string | null): Headers {
 
 function filterUpstreamHeaders(incoming: Headers): Headers {
   const out = new Headers();
-
-  // Only forward headers that matter to Cursor API.
-  const allow = new Set([
-    'authorization',
-    'content-type',
-    'accept',
-    'user-agent',
-    'x-request-id',
-  ]);
+  const allow = new Set(['authorization', 'content-type', 'accept', 'user-agent', 'x-request-id']);
 
   for (const [k, v] of incoming.entries()) {
     if (allow.has(k.toLowerCase())) out.set(k, v);
@@ -41,10 +31,17 @@ export default async function handler(request: Request): Promise<Response> {
     return new Response(null, { status: 204, headers: corsHeaders(origin) });
   }
 
-  // Map: /api/cursor/<path>  ->  https://api.cursor.com/<path>
-  const upstreamPath = url.pathname.replace(/^\/api\/cursor/, '') || '/';
+  // With `vercel.json` rewrite:
+  // /api/cursor/<path>?a=b  ->  /api/cursor?path=<path>&a=b
+  const pathParam = url.searchParams.get('path') ?? '';
+  const upstreamPath = `/${pathParam}`.replace(/\/+/, '/');
+
+  // Forward any query params except `path`.
   const upstreamUrl = new URL(`https://api.cursor.com${upstreamPath}`);
-  upstreamUrl.search = url.search;
+  for (const [k, v] of url.searchParams.entries()) {
+    if (k === 'path') continue;
+    upstreamUrl.searchParams.append(k, v);
+  }
 
   const upstreamRequest = new Request(upstreamUrl.toString(), {
     method: request.method,
@@ -55,8 +52,8 @@ export default async function handler(request: Request): Promise<Response> {
 
   const upstreamResponse = await fetch(upstreamRequest);
 
-  // Copy upstream headers through, but ensure CORS and strip hop-by-hop headers.
   const headers = new Headers(upstreamResponse.headers);
+  // Remove hop-by-hop headers
   headers.delete('connection');
   headers.delete('keep-alive');
   headers.delete('proxy-authenticate');

@@ -1,0 +1,9 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/cursor/:path*",
+      "destination": "/api/cursor?path=:path*"
+    }
+  ]
+}
+
