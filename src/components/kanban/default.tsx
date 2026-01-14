@@ -395,13 +395,14 @@ export default function CloudAgentsKanban({ apiKeySet, onOpenSettings }: CloudAg
     }
   }, [apiKeySet, loadAgents, loadDrafts]);
 
-  // Auto-polling every 10 seconds (pause when drawer is open)
+  // Auto-polling every 30 seconds (pause when drawer is open)
+  // Rate limit is 30 requests/minute, so 30s interval keeps us well under
   React.useEffect(() => {
     if (!apiKeySet || isDrawerOpen) return;
 
     const interval = setInterval(() => {
       loadAgents();
-    }, 10000);
+    }, 30000);
 
     return () => clearInterval(interval);
   }, [apiKeySet, isDrawerOpen, loadAgents]);
