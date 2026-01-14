@@ -270,8 +270,8 @@ function AgentColumn({ columnKey, agents, drafts = [], onAgentClick, onAddClick 
   const items = columnKey === 'backlog' ? drafts : agents;
 
   return (
-    <KanbanColumn value={columnKey} className="rounded-md border bg-card p-2.5 shadow-xs min-h-[200px] min-w-[280px] w-[280px] flex-shrink-0">
-      <div className="flex items-center justify-between mb-2.5">
+    <KanbanColumn value={columnKey} className="rounded-md border bg-card p-2.5 shadow-xs min-w-[280px] w-[280px] flex-shrink-0 flex flex-col h-full">
+      <div className="flex items-center justify-between mb-2.5 flex-shrink-0">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-sm">{config.title}</span>
           <Badge variant="secondary">{items.length}</Badge>
@@ -289,16 +289,18 @@ function AgentColumn({ columnKey, agents, drafts = [], onAgentClick, onAddClick 
           </KanbanColumnHandle>
         </div>
       </div>
-      <KanbanColumnContent value={columnKey} className="flex flex-col gap-2 p-0.5">
-        {items.map((agent) => (
-          <AgentCard
-            key={agent.id}
-            agent={agent}
-            isDraft={columnKey === 'backlog'}
-            onClick={() => onAgentClick(agent, columnKey === 'backlog')}
-          />
-        ))}
-      </KanbanColumnContent>
+      <ScrollArea className="flex-1 min-h-0">
+        <KanbanColumnContent value={columnKey} className="flex flex-col gap-2 p-0.5 pr-2">
+          {items.map((agent) => (
+            <AgentCard
+              key={agent.id}
+              agent={agent}
+              isDraft={columnKey === 'backlog'}
+              onClick={() => onAgentClick(agent, columnKey === 'backlog')}
+            />
+          ))}
+        </KanbanColumnContent>
+      </ScrollArea>
     </KanbanColumn>
   );
 }
@@ -602,7 +604,7 @@ export default function CloudAgentsKanban({ apiKeySet, onOpenSettings }: CloudAg
   // Render empty state
   if (!apiKeySet) {
     return (
-      <div className="flex flex-col items-center justify-center h-[400px] text-center">
+      <div className="flex flex-col items-center justify-center h-full text-center">
         <AlertCircle className="size-12 text-muted-foreground mb-4" />
         <h3 className="text-lg font-semibold mb-2">API Key Required</h3>
         <p className="text-muted-foreground mb-4">
@@ -615,51 +617,54 @@ export default function CloudAgentsKanban({ apiKeySet, onOpenSettings }: CloudAg
 
   return (
     <>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          {isLoading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
-          {lastRefresh && (
-            <span className="text-xs text-muted-foreground">
-              Last updated: {lastRefresh.toLocaleTimeString()}
-            </span>
-          )}
+      <div className="h-full flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            {isLoading && <Loader2 className="size-4 animate-spin text-muted-foreground" />}
+            {lastRefresh && (
+              <span className="text-xs text-muted-foreground">
+                Last updated: {lastRefresh.toLocaleTimeString()}
+              </span>
+            )}
+          </div>
+          <Button variant="outline" size="sm" onClick={loadAgents} disabled={isLoading}>
+            <RefreshCw className={`size-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
         </div>
-        <Button variant="outline" size="sm" onClick={loadAgents} disabled={isLoading}>
-          <RefreshCw className={`size-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+
+        {error && (
+          <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm flex items-center gap-2 flex-shrink-0">
+            <XCircle className="size-4" />
+            {error}
+          </div>
+        )}
+
+        {/* Kanban Board */}
+        <Kanban
+          value={columns}
+          onValueChange={() => {}} // Read-only - positions determined by status
+          getItemValue={(item) => item.id}
+          className="flex-1 min-h-0"
+        >
+          <KanbanBoard className="flex gap-4 overflow-auto h-full pb-4">
+            {Object.keys(COLUMNS).map((columnKey) => (
+              <AgentColumn
+                key={columnKey}
+                columnKey={columnKey}
+                agents={columns[columnKey] || []}
+                drafts={columnKey === 'backlog' ? drafts : []}
+                onAgentClick={handleAgentClick}
+                onAddClick={columnKey === 'backlog' ? handleOpenCreate : undefined}
+              />
+            ))}
+          </KanbanBoard>
+          <KanbanOverlay>
+            <div className="rounded-md bg-muted/60 size-full" />
+          </KanbanOverlay>
+        </Kanban>
       </div>
-
-      {error && (
-        <div className="mb-4 p-3 rounded-md bg-destructive/10 text-destructive text-sm flex items-center gap-2">
-          <XCircle className="size-4" />
-          {error}
-        </div>
-      )}
-
-      {/* Kanban Board */}
-      <Kanban
-        value={columns}
-        onValueChange={() => {}} // Read-only - positions determined by status
-        getItemValue={(item) => item.id}
-      >
-        <KanbanBoard className="flex gap-4 overflow-x-auto pb-4">
-          {Object.keys(COLUMNS).map((columnKey) => (
-            <AgentColumn
-              key={columnKey}
-              columnKey={columnKey}
-              agents={columns[columnKey] || []}
-              drafts={columnKey === 'backlog' ? drafts : []}
-              onAgentClick={handleAgentClick}
-              onAddClick={columnKey === 'backlog' ? handleOpenCreate : undefined}
-            />
-          ))}
-        </KanbanBoard>
-        <KanbanOverlay>
-          <div className="rounded-md bg-muted/60 size-full" />
-        </KanbanOverlay>
-      </Kanban>
 
       {/* Agent Detail Drawer */}
       <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>

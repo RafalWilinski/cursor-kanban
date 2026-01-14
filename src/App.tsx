@@ -21,10 +21,10 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto max-w-[1600px] p-6">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
+      <div className="mx-auto max-w-[1600px] w-full px-6 pt-6 pb-2 flex-shrink-0">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Cloud Agents</h1>
             <p className="text-sm text-muted-foreground">
@@ -33,8 +33,10 @@ function App() {
           </div>
           <ApiKeySettingsButton onClick={() => setShowApiKeyModal(true)} />
         </div>
+      </div>
 
-        {/* Kanban Board */}
+      {/* Kanban Board - takes remaining height */}
+      <div className="flex-1 min-h-0 px-6 pb-6">
         <CloudAgentsKanban
           apiKeySet={apiKeySet}
           onOpenSettings={() => setShowApiKeyModal(true)}
