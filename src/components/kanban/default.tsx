@@ -82,7 +82,7 @@ const COLUMNS: Record<string, { title: string; description: string }> = {
   creating: { title: 'Starting', description: 'Agents being initialized' },
   running: { title: 'In Progress', description: 'Agents currently working' },
   needs_input: { title: 'Needs Input', description: 'Waiting for follow-up or no PR' },
-  failed: { title: 'Failed/Expired', description: 'Agents with errors or expired' },
+  failed: { title: 'Failed', description: 'Agents with errors' },
   draft_pr: { title: 'Draft PR', description: 'PRs marked as draft' },
   checks_failing: { title: 'Checks Failing', description: 'PRs with failing CI' },
   has_conflict: { title: 'Has Conflict', description: 'PRs with merge conflicts' },
@@ -154,7 +154,8 @@ function getColumnForStatus(status: AgentStatus, prUrl?: string, prStatus?: PrSt
     return 'running';
   }
 
-  // Handle error/expired agents - these failed
+  // Handle error/expired agents - treat as failed
+  // (Expired agents are filtered at the API layer and should not appear here.)
   if (status === 'ERROR' || status === 'EXPIRED') {
     return 'failed';
   }

@@ -307,7 +307,13 @@ export async function listAgents(
   if (cursor) {
     params.set('cursor', cursor);
   }
-  return apiRequest<ListAgentsResponse>(`/v0/agents?${params.toString()}`);
+  const response = await apiRequest<ListAgentsResponse>(`/v0/agents?${params.toString()}`);
+  // Never surface EXPIRED agents in the app.
+  // Cursor may still return them from the list endpoint; we filter them out centrally.
+  return {
+    ...response,
+    agents: response.agents.filter((a) => a.status !== 'EXPIRED'),
+  };
 }
 
 export async function getAllAgents(): Promise<Agent[]> {
