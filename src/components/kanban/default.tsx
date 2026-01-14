@@ -92,6 +92,51 @@ const COLUMNS: Record<string, { title: string; description: string }> = {
   merged: { title: 'Merged/Closed', description: 'Completed PRs' },
 };
 
+const KANBAN_COLUMN_ORDER_STORAGE_KEY = 'cursor_cloud_agents_kanban_column_order';
+
+function getSavedColumnOrder(): string[] | null {
+  try {
+    if (typeof window === 'undefined') return null;
+    const raw = window.localStorage.getItem(KANBAN_COLUMN_ORDER_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveColumnOrder(order: string[]): void {
+  try {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(KANBAN_COLUMN_ORDER_STORAGE_KEY, JSON.stringify(order));
+  } catch {
+    // ignore persistence failures (e.g. private mode / full quota)
+  }
+}
+
+function normalizeColumnOrder(order: string[], allColumns: string[]): string[] {
+  const allowed = new Set(allColumns);
+  const seen = new Set<string>();
+
+  const normalized: string[] = [];
+  for (const key of order) {
+    if (allowed.has(key) && !seen.has(key)) {
+      normalized.push(key);
+      seen.add(key);
+    }
+  }
+
+  for (const key of allColumns) {
+    if (!seen.has(key)) {
+      normalized.push(key);
+      seen.add(key);
+    }
+  }
+
+  return normalized;
+}
+
 // Map API status and PR info to column
 function getColumnForStatus(status: AgentStatus, prUrl?: string, prStatus?: PrStatus | null): string {
   // Handle local drafts
@@ -315,7 +360,7 @@ function AgentCard({ agent, isDraft, prStatus, onClick }: AgentCardProps) {
   );
 
   return (
-    <KanbanItem value={agent.id}>
+    <KanbanItem value={agent.id} disabled>
       <KanbanItemHandle>{cardContent}</KanbanItemHandle>
     </KanbanItem>
   );
@@ -431,6 +476,23 @@ export default function CloudAgentsKanban({ apiKeySet, onOpenSettings }: CloudAg
   });
   const [isCreating, setIsCreating] = React.useState(false);
 
+  // Column order (persisted locally)
+  const allColumnKeys = React.useMemo(() => Object.keys(COLUMNS), []);
+  const [columnOrder, setColumnOrder] = React.useState<string[]>(() => {
+    const saved = getSavedColumnOrder();
+    return normalizeColumnOrder(saved ?? allColumnKeys, allColumnKeys);
+  });
+
+  React.useEffect(() => {
+    // Keep localStorage in sync with any changes (including new columns after deploy)
+    const normalized = normalizeColumnOrder(columnOrder, allColumnKeys);
+    if (normalized.join('|') !== columnOrder.join('|')) {
+      setColumnOrder(normalized);
+      return;
+    }
+    saveColumnOrder(normalized);
+  }, [allColumnKeys, columnOrder]);
+
   // Load agents from API
   const loadAgents = React.useCallback(async () => {
     if (!apiKeySet) return;
@@ -515,6 +577,16 @@ export default function CloudAgentsKanban({ apiKeySet, onOpenSettings }: CloudAg
 
     return result;
   }, [agents, prStatuses]);
+
+  // Apply persisted order to the derived columns map (object insertion order drives DnD-kit column order)
+  const orderedColumns = React.useMemo(() => {
+    const normalized = normalizeColumnOrder(columnOrder, allColumnKeys);
+    const ordered: Record<string, Agent[]> = {};
+    for (const key of normalized) {
+      ordered[key] = columns[key] ?? [];
+    }
+    return ordered;
+  }, [allColumnKeys, columnOrder, columns]);
 
   // Handle agent click
   const handleAgentClick = async (agent: Agent | DraftAgent, isDraft: boolean) => {
@@ -730,13 +802,17 @@ export default function CloudAgentsKanban({ apiKeySet, onOpenSettings }: CloudAg
 
         {/* Kanban Board */}
         <Kanban
-          value={columns}
-          onValueChange={() => {}} // Read-only - positions determined by status
+          value={orderedColumns}
+          onValueChange={(next) => {
+            // Only persist column order; items are read-only (derived from API status)
+            const nextOrder = normalizeColumnOrder(Object.keys(next), allColumnKeys);
+            setColumnOrder(nextOrder);
+          }}
           getItemValue={(item) => item.id}
           className="flex-1 min-h-0"
         >
           <KanbanBoard className="flex gap-4 overflow-auto h-full pb-4">
-            {Object.keys(COLUMNS).map((columnKey) => (
+            {columnOrder.map((columnKey) => (
               <AgentColumn
                 key={columnKey}
                 columnKey={columnKey}
