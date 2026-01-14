@@ -256,6 +256,17 @@ export async function listRepositories(
 // Draft management (stored locally)
 const DRAFTS_STORAGE_KEY = 'cursor_agent_drafts';
 
+// Last picked repository (stored locally)
+const LAST_REPOSITORY_KEY = 'cursor_last_repository';
+
+export function getLastRepository(): string | null {
+  return localStorage.getItem(LAST_REPOSITORY_KEY);
+}
+
+export function setLastRepository(repository: string): void {
+  localStorage.setItem(LAST_REPOSITORY_KEY, repository);
+}
+
 export interface DraftAgent {
   id: string;
   name: string;

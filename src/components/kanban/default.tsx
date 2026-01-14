@@ -70,6 +70,8 @@ import {
   getDrafts,
   saveDraft,
   deleteDraft,
+  getLastRepository,
+  setLastRepository,
 } from '@/lib/cursor-api';
 
 // Column configuration
@@ -533,27 +535,33 @@ export default function CloudAgentsKanban({ apiKeySet, onOpenSettings }: CloudAg
   // Open create form
   const handleOpenCreate = async () => {
     setIsCreateOpen(true);
-    setCreateForm({
-      name: '',
-      repository: '',
-      customRepo: '',
-      ref: 'main',
-      prompt: '',
-      model: '',
-    });
-
-    // Load repositories and models
+    const lastRepo = getLastRepository();
+    
+    // Load repositories first to determine if lastRepo is from dropdown or custom
     setIsLoadingRepos(true);
     setIsLoadingModels(true);
 
+    let reposList: Repository[] = [];
     try {
       const reposData = await listRepositories();
-      setRepositories(reposData.repositories);
+      reposList = reposData.repositories;
+      setRepositories(reposList);
     } catch (err) {
       console.error('Failed to load repositories:', err);
     } finally {
       setIsLoadingRepos(false);
     }
+    
+    // Check if lastRepo is in the dropdown list or a custom URL
+    const isInDropdown = lastRepo && reposList.some(r => r.repository === lastRepo);
+    setCreateForm({
+      name: '',
+      repository: isInDropdown ? lastRepo : '',
+      customRepo: lastRepo && !isInDropdown ? lastRepo : '',
+      ref: 'main',
+      prompt: '',
+      model: '',
+    });
 
     try {
       const modelsData = await listModels();
@@ -829,7 +837,10 @@ export default function CloudAgentsKanban({ apiKeySet, onOpenSettings }: CloudAg
               <Label htmlFor="repository">Repository</Label>
               <Select
                 value={createForm.repository}
-                onValueChange={(value) => setCreateForm((f) => ({ ...f, repository: value, customRepo: '' }))}
+                onValueChange={(value) => {
+                  setCreateForm((f) => ({ ...f, repository: value, customRepo: '' }));
+                  setLastRepository(value);
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder={isLoadingRepos ? 'Loading...' : 'Select a repository'} />
@@ -845,7 +856,13 @@ export default function CloudAgentsKanban({ apiKeySet, onOpenSettings }: CloudAg
               <div className="text-xs text-muted-foreground">Or enter manually:</div>
               <Input
                 value={createForm.customRepo}
-                onChange={(e) => setCreateForm((f) => ({ ...f, customRepo: e.target.value, repository: '' }))}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setCreateForm((f) => ({ ...f, customRepo: value, repository: '' }));
+                  if (value) {
+                    setLastRepository(value);
+                  }
+                }}
                 placeholder="https://github.com/owner/repo"
               />
             </div>
