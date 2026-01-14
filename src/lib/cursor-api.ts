@@ -1,4 +1,8 @@
-const API_BASE = 'https://api.cursor.com';
+// IMPORTANT:
+// Cursor's public API does not allow browser CORS from arbitrary origins.
+// In production we call our own same-origin proxy at `/api/cursor/*` (Vercel serverless),
+// which forwards requests to https://api.cursor.com.
+const API_BASE = '/api/cursor';
 const API_KEY_STORAGE_KEY = 'cursor_api_key';
 const REPOS_CACHE_KEY = 'cursor_repos_cache';
 const REPOS_CACHE_EXPIRY_KEY = 'cursor_repos_cache_expiry';

@@ -41,6 +41,7 @@ interface KanbanContextProps<T> {
   isColumn: (id: UniqueIdentifier) => boolean;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const KanbanContext = React.createContext<KanbanContextProps<any>>({
   columns: {},
   setColumns: () => {},
