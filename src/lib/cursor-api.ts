@@ -21,15 +21,192 @@ export interface AgentTarget {
   autoCreatePr?: boolean;
   openAsCursorGithubApp?: boolean;
   skipReviewerRequest?: boolean;
-  // PR status fields
-  checksStatus?: 'pending' | 'success' | 'failure';
-  hasApproval?: boolean;
-  isMerged?: boolean;
-  isClosed?: boolean;
-  hasConflict?: boolean;
 }
 
-export type AgentStatus = 'RUNNING' | 'FINISHED' | 'STOPPED' | 'FAILED' | 'DRAFT';
+// Cursor API returns these statuses (DRAFT is local-only for drafts)
+export type AgentStatus = 'CREATING' | 'RUNNING' | 'FINISHED' | 'ERROR' | 'EXPIRED' | 'DRAFT';
+
+// PR status fetched from GitHub API
+export interface PrStatus {
+  state: 'open' | 'closed' | 'merged';
+  isDraft: boolean;
+  mergeable: boolean | null;
+  mergeableState: string | null;
+  checksStatus: 'pending' | 'success' | 'failure' | 'unknown';
+  hasApproval: boolean;
+  reviewDecision: string | null;
+}
+
+// Cache for PR statuses
+const PR_STATUS_CACHE: Map<string, { status: PrStatus; fetchedAt: number }> = new Map();
+const PR_STATUS_CACHE_TTL = 60 * 1000; // 1 minute
+
+// Parse PR URL to extract owner, repo, and PR number
+export function parsePrUrl(prUrl: string): { owner: string; repo: string; number: number } | null {
+  try {
+    const match = prUrl.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
+    if (match) {
+      return { owner: match[1], repo: match[2], number: parseInt(match[3], 10) };
+    }
+  } catch {
+    // Invalid URL
+  }
+  return null;
+}
+
+// Fetch PR status from GitHub API (unauthenticated, rate-limited)
+export async function fetchPrStatus(prUrl: string): Promise<PrStatus | null> {
+  const parsed = parsePrUrl(prUrl);
+  if (!parsed) return null;
+
+  // Check cache first
+  const cached = PR_STATUS_CACHE.get(prUrl);
+  if (cached && Date.now() - cached.fetchedAt < PR_STATUS_CACHE_TTL) {
+    return cached.status;
+  }
+
+  try {
+    const { owner, repo, number } = parsed;
+    
+    // Fetch PR details
+    const prResponse = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/pulls/${number}`,
+      {
+        headers: {
+          'Accept': 'application/vnd.github.v3+json',
+          'User-Agent': 'cursor-kanban',
+        },
+      }
+    );
+
+    if (!prResponse.ok) {
+      console.warn(`Failed to fetch PR status for ${prUrl}: ${prResponse.status}`);
+      return null;
+    }
+
+    const prData = await prResponse.json();
+
+    // Determine merged state
+    const state: 'open' | 'closed' | 'merged' = prData.merged
+      ? 'merged'
+      : prData.state === 'closed'
+      ? 'closed'
+      : 'open';
+
+    // Determine checks status from the head SHA commit status
+    let checksStatus: 'pending' | 'success' | 'failure' | 'unknown' = 'unknown';
+    
+    try {
+      // Try to get combined status
+      const statusResponse = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/commits/${prData.head.sha}/status`,
+        {
+          headers: {
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'cursor-kanban',
+          },
+        }
+      );
+      
+      if (statusResponse.ok) {
+        const statusData = await statusResponse.json();
+        if (statusData.state === 'success') {
+          checksStatus = 'success';
+        } else if (statusData.state === 'failure' || statusData.state === 'error') {
+          checksStatus = 'failure';
+        } else if (statusData.state === 'pending') {
+          checksStatus = 'pending';
+        }
+      }
+      
+      // Also check GitHub Actions check runs
+      const checksResponse = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/commits/${prData.head.sha}/check-runs`,
+        {
+          headers: {
+            'Accept': 'application/vnd.github.v3+json',
+            'User-Agent': 'cursor-kanban',
+          },
+        }
+      );
+      
+      if (checksResponse.ok) {
+        const checksData = await checksResponse.json();
+        const checkRuns = checksData.check_runs || [];
+        
+        if (checkRuns.length > 0) {
+          const hasFailure = checkRuns.some((run: { conclusion: string }) => 
+            run.conclusion === 'failure' || run.conclusion === 'cancelled' || run.conclusion === 'timed_out'
+          );
+          const allSuccess = checkRuns.every((run: { conclusion: string; status: string }) => 
+            run.conclusion === 'success' || run.conclusion === 'skipped' || run.conclusion === 'neutral'
+          );
+          const hasPending = checkRuns.some((run: { status: string }) => 
+            run.status === 'queued' || run.status === 'in_progress'
+          );
+          
+          if (hasFailure) {
+            checksStatus = 'failure';
+          } else if (hasPending) {
+            checksStatus = 'pending';
+          } else if (allSuccess) {
+            checksStatus = 'success';
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch check status:', e);
+    }
+
+    // Determine approval status from review decision
+    const hasApproval = prData.mergeable_state === 'clean' || 
+                       prData.review_decision === 'APPROVED';
+
+    const status: PrStatus = {
+      state,
+      isDraft: prData.draft || false,
+      mergeable: prData.mergeable,
+      mergeableState: prData.mergeable_state,
+      checksStatus,
+      hasApproval,
+      reviewDecision: prData.review_decision || null,
+    };
+
+    // Cache the result
+    PR_STATUS_CACHE.set(prUrl, { status, fetchedAt: Date.now() });
+
+    return status;
+  } catch (error) {
+    console.error(`Error fetching PR status for ${prUrl}:`, error);
+    return null;
+  }
+}
+
+// Batch fetch PR statuses for multiple agents
+export async function fetchPrStatusesForAgents(agents: Agent[]): Promise<Map<string, PrStatus>> {
+  const results = new Map<string, PrStatus>();
+  
+  // Only fetch for agents with PR URLs
+  const agentsWithPrs = agents.filter(a => a.target?.prUrl);
+  
+  // Fetch in parallel with a small concurrency limit to avoid rate limits
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < agentsWithPrs.length; i += BATCH_SIZE) {
+    const batch = agentsWithPrs.slice(i, i + BATCH_SIZE);
+    const promises = batch.map(async (agent) => {
+      const prUrl = agent.target?.prUrl;
+      if (prUrl) {
+        const status = await fetchPrStatus(prUrl);
+        if (status) {
+          results.set(agent.id, status);
+        }
+      }
+    });
+    await Promise.all(promises);
+  }
+  
+  return results;
+}
 
 export interface Agent {
   id: string;
