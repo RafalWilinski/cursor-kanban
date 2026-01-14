@@ -41,7 +41,7 @@ interface KanbanContextProps<T> {
   isColumn: (id: UniqueIdentifier) => boolean;
 }
 
-const KanbanContext = React.createContext<KanbanContextProps<any>>({
+const KanbanContext = React.createContext<KanbanContextProps<unknown>>({
   columns: {},
   setColumns: () => {},
   getItemId: () => '',

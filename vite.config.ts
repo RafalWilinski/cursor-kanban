@@ -11,4 +11,14 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  server: {
+    proxy: {
+      // Local dev proxy to avoid CORS (mirrors Vercel `/api/cursor/*` function)
+      '/api/cursor': {
+        target: 'https://api.cursor.com',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/cursor/, ''),
+      },
+    },
+  },
 })
